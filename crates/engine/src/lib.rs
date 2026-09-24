@@ -16,11 +16,11 @@ use zeron_rpc::{RpcError, RpcReply, RpcService, methods};
 use zeron_sync::DocsStore;
 
 pub mod agent_accounts;
+mod agent_import;
 pub mod auth;
 pub mod change_requests;
 pub mod chat2_host;
 mod chat_persistence;
-mod codex_import;
 pub mod diff_sync;
 pub mod doc_host;
 mod http_error;
@@ -246,18 +246,7 @@ impl EngineCore {
         doc_host.set_sessions(sessions.clone());
         sessions.set_doc_host(doc_host.clone());
         if profile.scope() == WorkspaceScope::Local {
-            let codex_home = std::env::var_os("CODEX_HOME")
-                .map(PathBuf::from)
-                .or_else(|| Some(crate::repos::home_dir().join(".codex")));
-            if let Some(codex_home) = codex_home {
-                match codex_import::import(&codex_home, &workspace, &doc_host, &device_id) {
-                    Ok(imported) if imported > 0 => {
-                        tracing::info!(imported, "imported Codex sessions");
-                    }
-                    Ok(_) => {}
-                    Err(err) => tracing::warn!(error = %err, "Codex session import failed"),
-                }
-            }
+            doc_host.spawn_agent_import();
         }
         match sessions.recover_stale() {
             Ok(0) => {}
